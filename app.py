@@ -2,10 +2,8 @@ import math
 import tkinter as tk
 from tkinter import filedialog
 
-import numpy as np
 import rx
 from rx.operators import debounce
-from PIL import Image, ImageTk
 
 from slider import Slider
 
@@ -22,15 +20,12 @@ class ImageEditor(tk.Frame):
         self.canvas_width = 600
         self.canvas_height = 600
 
-        # Создание холста
         self.canvas = tk.Canvas(self, bg="white", width=self.canvas_width, height=self.canvas_height)
         self.canvas.grid(column=0, row=0, rowspan=9, sticky="W")
 
-        # Создание кнопки для загрузки изображения
         self.load_button = tk.Button(self, text="Load Image", command=self.load_image)
         self.load_button.grid(column=1, row=0, sticky="W")
 
-        # Создание элементов управления для параметров
         self.create_controls()
         self.grid_columnconfigure(0, weight=1)
 
@@ -56,26 +51,21 @@ class ImageEditor(tk.Frame):
     def transform_points(points, rotation_xy, z_near, z_far, dx, dy, focal_length_1, focal_length_2, radial_distortion):
         transformed_points = []
         for x, y, z in points:
-            # Применяем поворот XY к точкам
             rotated_x = x * math.cos(math.radians(rotation_xy)) - y * math.sin(math.radians(rotation_xy))
             rotated_y = x * math.sin(math.radians(rotation_xy)) + y * math.cos(math.radians(rotation_xy))
             rotated_z = z
 
-            # Применяем перенос
             translated_x = rotated_x + dx
             translated_y = rotated_y + dy
             translated_z = rotated_z
 
-            # Применяем перспективное преобразование
             transformed_x = translated_x * (focal_length_1 / (translated_z + z_near))
             transformed_y = translated_y * (focal_length_2 / (translated_z + z_near))
 
-            # Применяем z_far
             if translated_z > z_far:
                 transformed_x = transformed_x * z_far / translated_z
                 transformed_y = transformed_y * z_far / translated_z
 
-            # Применяем радиальное искажение
             r_squared = transformed_x ** 2 + transformed_y ** 2
             distorted_r = 1 + radial_distortion * r_squared
             transformed_x *= distorted_r
@@ -88,14 +78,12 @@ class ImageEditor(tk.Frame):
     def draw_model(self, points):
         self.canvas.delete(tk.ALL)
 
-        # Находим минимальное и максимальное значения по осям X и Y
         min_x = min(points, key=lambda p: p[0])[0]
         min_y = min(points, key=lambda p: p[1])[1]
         max_x = max(points, key=lambda p: p[0])[0]
         max_y = max(points, key=lambda p: p[1])[1]
 
         print(len(points))
-        # Определяем масштабированные координаты для каждой точки
         scaled_points = []
         for x, y in points:
             scaled_x = (x - min_x) / (max_x - min_x) * (self.canvas_width - 200) + 100
@@ -103,18 +91,11 @@ class ImageEditor(tk.Frame):
             scaled_points.append((scaled_x, scaled_y))
 
         print(len(scaled_points))
-        # Отрисовка модели на холсте
-        # for i in range(len(scaled_points)):
-        #     for j in range(i + 1, len(scaled_points)):
-        #         x1, y1 = scaled_points[i]
-        #         x2, y2 = scaled_points[j % len(scaled_points)]
-        #         self.canvas.create_line(x1, y1, x2, y2, fill="blue")
         for i in range(len(scaled_points)):
             x1, y1 = scaled_points[i]
             self.canvas.create_oval(x1 - 5, y1 - 5, x1 + 5, y1 + 5)
             for j in range(8):
                 x2, y2 = scaled_points[(i + j + 1) % len(scaled_points)]
-                # self.canvas.create_line(x1, y1, x2, y2, fill="blue")
 
     def create_controls(self):
         # Параметры перспективного преобразования
@@ -129,13 +110,11 @@ class ImageEditor(tk.Frame):
         self.dy_slider = Slider(self, "dY", -100, 100, 0)
         self.dy_slider.grid(column=1, row=5)
 
-        # Параметры камеры
         self.focal_length_1_slider = Slider(self, "Focal Length 1", 1, 100, 50)
         self.focal_length_1_slider.grid(column=1, row=6)
         self.focal_length_2_slider = Slider(self, "Focal Length 2", 1, 100, 50)
         self.focal_length_2_slider.grid(column=1, row=7)
 
-        # Параметры радиальных искажений
         self.radial_distortion_slider = Slider(self, "Radial Distortion (K1)", -1, 1, 0)
         self.radial_distortion_slider.grid(column=1, row=8)
         rx.combine_latest(
