@@ -1,4 +1,5 @@
 import math
+import time
 import tkinter as tk
 from tkinter import filedialog
 
@@ -90,12 +91,15 @@ class ImageEditor(tk.Frame):
             scaled_y = (y - min_y) / (max_y - min_y) * (self.canvas_height - 200) + 100
             scaled_points.append((scaled_x, scaled_y))
 
-        print(len(scaled_points))
         for i in range(len(scaled_points)):
             x1, y1 = scaled_points[i]
             self.canvas.create_oval(x1 - 5, y1 - 5, x1 + 5, y1 + 5)
-            for j in range(8):
-                x2, y2 = scaled_points[(i + j + 1) % len(scaled_points)]
+            x2, y2 = scaled_points[(i + 1) % len(scaled_points)]
+            self.canvas.create_line(x1, y1, x2, y2)
+            x2, y2 = scaled_points[(len(scaled_points) - 1 - i) % len(scaled_points)]
+            self.canvas.create_line(x1, y1, x2, y2)
+            x2, y2 = scaled_points[(len(scaled_points) - len(scaled_points) // 2 - i) % len(scaled_points)]
+            self.canvas.create_line(x1, y1, x2, y2)
 
     def create_controls(self):
         # Параметры перспективного преобразования
