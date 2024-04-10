@@ -98,7 +98,7 @@ class ImageEditor(tk.Frame):
             self.canvas.create_line(x1, y1, x2, y2)
             x2, y2 = scaled_points[(len(scaled_points) - 1 - i) % len(scaled_points)]
             self.canvas.create_line(x1, y1, x2, y2)
-            x2, y2 = scaled_points[(len(scaled_points) - len(scaled_points) // 2 - i) % len(scaled_points)]
+            x2, y2 = scaled_points[(len(scaled_points) - len(scaled_points) // 2 - 1 - i) % len(scaled_points)]
             self.canvas.create_line(x1, y1, x2, y2)
 
     def create_controls(self):
