@@ -63,9 +63,9 @@ class ImageEditor(tk.Frame):
             transformed_x = translated_x * (focal_length_1 / (translated_z + z_near))
             transformed_y = translated_y * (focal_length_2 / (translated_z + z_near))
 
-            if translated_z > z_far:
-                transformed_x = transformed_x * z_far / translated_z
-                transformed_y = transformed_y * z_far / translated_z
+            if translated_z * 1000 > z_far:
+                transformed_x = transformed_x * z_far / (translated_z * 1000)
+                transformed_y = transformed_y * z_far / (translated_z * 1000)
 
             r_squared = transformed_x ** 2 + transformed_y ** 2
             distorted_r = 1 + radial_distortion * r_squared
@@ -107,7 +107,7 @@ class ImageEditor(tk.Frame):
         self.rotate_xy_slider.grid(column=1, row=1)
         self.z_near_slider = Slider(self, "Z Near", 1, 100, 10)
         self.z_near_slider.grid(column=1, row=2)
-        self.z_far_slider = Slider(self, "Z Far", 100, 1000, 500)
+        self.z_far_slider = Slider(self, "Z Far", 100, 1000, 1000)
         self.z_far_slider.grid(column=1, row=3)
         self.dx_slider = Slider(self, "dX", -100, 100, 0)
         self.dx_slider.grid(column=1, row=4)
