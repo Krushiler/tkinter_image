@@ -1,8 +1,10 @@
 import math
-import time
 import tkinter as tk
 from tkinter import filedialog
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg, NavigationToolbar2Tk)
 
+import numpy as np
 import rx
 from rx.operators import debounce
 
@@ -21,8 +23,12 @@ class ImageEditor(tk.Frame):
         self.canvas_width = 600
         self.canvas_height = 600
 
-        self.canvas = tk.Canvas(self, bg="white", width=self.canvas_width, height=self.canvas_height)
-        self.canvas.grid(column=0, row=0, rowspan=9, sticky="W")
+        self.fig = Figure(figsize=(7, 7), dpi=100)
+        self.plot1 = self.fig.add_subplot(111)
+        # self.plot1.set_aspect('equal')
+
+        self.canvas = FigureCanvasTkAgg(self.fig, master=self)
+        self.canvas.get_tk_widget().grid(column=0, row=0, rowspan=9, sticky="W")
 
         self.load_button = tk.Button(self, text="Load Image", command=self.load_image)
         self.load_button.grid(column=1, row=0, sticky="W")
@@ -33,13 +39,12 @@ class ImageEditor(tk.Frame):
     def load_image(self):
         file_path = tk.filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
         if file_path:
-            with open(file_path, 'r') as file:
-                self.points = [tuple(map(float, line.split())) for line in file]
+            file = open(file_path, 'r')
+            self.points = file.readlines()
+            file.close()
             self.render_image()
 
     def render_image(self):
-        self.canvas.delete("all")
-
         if not self.points:
             return
 
@@ -49,78 +54,76 @@ class ImageEditor(tk.Frame):
         self.update_image(self.values)
 
     @staticmethod
-    def transform_points(points, rotation_xy, z_near, z_far, dx, dy, focal_length_1, focal_length_2, radial_distortion):
-        transformed_points = []
-        for x, y, z in points:
-            rotated_x = x * math.cos(math.radians(rotation_xy)) - y * math.sin(math.radians(rotation_xy))
-            rotated_y = x * math.sin(math.radians(rotation_xy)) + y * math.cos(math.radians(rotation_xy))
-            rotated_z = z
+    def transform_points(points, rotation_xy, z_near, z_far, dx, dy, focal_length_1, focal_length_2, k1, k2, center1,
+                         center2):
+        object = []
 
-            translated_x = rotated_x + dx
-            translated_y = rotated_y + dy
-            translated_z = rotated_z
+        for s in points:
+            s += ' 1'
+            object.append(s.split())
 
-            transformed_x = translated_x * (focal_length_1 / (translated_z + z_near))
-            transformed_y = translated_y * (focal_length_2 / (translated_z + z_near))
+        object = np.array(object).astype(float)
 
-            if translated_z * 1000 > z_far:
-                transformed_x = transformed_x * z_far / (translated_z * 1000)
-                transformed_y = transformed_y * z_far / (translated_z * 1000)
+        z_range = z_far - z_near
 
-            r_squared = transformed_x ** 2 + transformed_y ** 2
-            distorted_r = 1 + radial_distortion * r_squared
-            transformed_x *= distorted_r
-            transformed_y *= distorted_r
+        P = np.array([[rotation_xy, 1 - rotation_xy, dx, 0], [-1 + rotation_xy, rotation_xy, dy, 0],
+                      [0, 0, -z_far / z_range, z_near * z_far / z_range], [0, 0, 1, 0]])
+        Cam = np.array([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]])
 
-            transformed_points.append((transformed_x, transformed_y))
+        dots = []
 
-        return transformed_points
+        for i in range(object.shape[0]):
+            f = Cam @ P @ object[i, :]
+            dots.append(f / f[2])
+        dots = np.array(dots)
+
+        dots_center = np.array([center1, center2])
+        K1 = k1
+        K2 = k2
+
+        f1 = focal_length_1
+        f2 = focal_length_2
+
+        mask = np.expand_dims(K1 * f1 + K2 * f2, axis=-1)
+        dots_new = (dots[:, :2]) + (dots[:, :2] - dots_center) * mask
+
+        return (dots_new[:, 0], dots_new[:, 1]), (dots[:, 0], dots[:, 1])
 
     def draw_model(self, points):
-        self.canvas.delete(tk.ALL)
-
-        min_x = min(points, key=lambda p: p[0])[0]
-        min_y = min(points, key=lambda p: p[1])[1]
-        max_x = max(points, key=lambda p: p[0])[0]
-        max_y = max(points, key=lambda p: p[1])[1]
-
-        print(len(points))
-        scaled_points = []
-        for x, y in points:
-            scaled_x = (x - min_x) / (max_x - min_x) * (self.canvas_width - 200) + 100
-            scaled_y = (y - min_y) / (max_y - min_y) * (self.canvas_height - 200) + 100
-            scaled_points.append((scaled_x, scaled_y))
-
-        for i in range(len(scaled_points)):
-            x1, y1 = scaled_points[i]
-            self.canvas.create_oval(x1 - 5, y1 - 5, x1 + 5, y1 + 5)
-            x2, y2 = scaled_points[(i + 1) % len(scaled_points)]
-            self.canvas.create_line(x1, y1, x2, y2)
-            x2, y2 = scaled_points[(len(scaled_points) - 1 - i) % len(scaled_points)]
-            self.canvas.create_line(x1, y1, x2, y2)
-            x2, y2 = scaled_points[(len(scaled_points) - len(scaled_points) // 2 - 1 - i) % len(scaled_points)]
-            self.canvas.create_line(x1, y1, x2, y2)
+        self.plot1.clear()
+        self.plot1.plot(points[0][0], points[0][1], '-D')
+        self.plot1.plot(points[1][0], points[1][1], '-D')
+        self.canvas.draw()
 
     def create_controls(self):
-        # Параметры перспективного преобразования
-        self.rotate_xy_slider = Slider(self, "Rotation XY", 0, 360, 0)
+        self.rotate_xy_slider = Slider(self, "Rotation XY", 0, 1, 0)
         self.rotate_xy_slider.grid(column=1, row=1)
-        self.z_near_slider = Slider(self, "Z Near", 1, 100, 10)
+        self.z_near_slider = Slider(self, "Z Near", -100, 100, -3)
         self.z_near_slider.grid(column=1, row=2)
-        self.z_far_slider = Slider(self, "Z Far", 100, 1000, 1000)
+        self.z_far_slider = Slider(self, "Z Far", -100, 100, -10)
         self.z_far_slider.grid(column=1, row=3)
         self.dx_slider = Slider(self, "dX", -100, 100, 0)
         self.dx_slider.grid(column=1, row=4)
         self.dy_slider = Slider(self, "dY", -100, 100, 0)
         self.dy_slider.grid(column=1, row=5)
 
-        self.focal_length_1_slider = Slider(self, "Focal Length 1", 1, 100, 50)
-        self.focal_length_1_slider.grid(column=1, row=6)
-        self.focal_length_2_slider = Slider(self, "Focal Length 2", 1, 100, 50)
-        self.focal_length_2_slider.grid(column=1, row=7)
+        self.focal_length_1_slider = Slider(self, "Focal Length 1", 1, 100, 1)
+        self.focal_length_1_slider.grid(column=2, row=1)
+        self.focal_length_2_slider = Slider(self, "Focal Length 2", 1, 100, 1)
+        self.focal_length_2_slider.grid(column=2, row=2)
 
-        self.radial_distortion_slider = Slider(self, "Radial Distortion (K1)", -1, 1, 0)
-        self.radial_distortion_slider.grid(column=1, row=8)
+        self.k1_slider = Slider(self, "K1", -100, 100, 0)
+        self.k1_slider.grid(column=2, row=3)
+
+        self.k2_slider = Slider(self, "K2", -100, 100, 0)
+        self.k2_slider.grid(column=2, row=4)
+
+        self.c1_slider = Slider(self, "Radius Center 1", -10, 10, 0.5)
+        self.c1_slider.grid(column=2, row=5)
+
+        self.c2_slider = Slider(self, "Radius Center 2", -10, 10, 0.5)
+        self.c2_slider.grid(column=2, row=6)
+
         rx.combine_latest(
             self.rotate_xy_slider.observable,
             self.z_near_slider.observable,
@@ -129,7 +132,10 @@ class ImageEditor(tk.Frame):
             self.dy_slider.observable,
             self.focal_length_1_slider.observable,
             self.focal_length_2_slider.observable,
-            self.radial_distortion_slider.observable,
+            self.k1_slider.observable,
+            self.k2_slider.observable,
+            self.c1_slider.observable,
+            self.c2_slider.observable,
         ).pipe(debounce(.5)).subscribe(self.update_image)
 
     def update_image(self, values):
@@ -137,6 +143,7 @@ class ImageEditor(tk.Frame):
         if not self.points:
             return
         print("Updating image with values:", values)
+        print(self.points)
         transformed_points = self.transform_points(self.points, *values)
         self.draw_model(transformed_points)
 
