@@ -1,11 +1,10 @@
-import math
 import tkinter as tk
 from tkinter import filedialog
-from matplotlib.figure import Figure
-from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg, NavigationToolbar2Tk)
 
 import numpy as np
 import rx
+from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg)
+from matplotlib.figure import Figure
 from rx.operators import debounce
 
 from slider import Slider
@@ -54,8 +53,7 @@ class ImageEditor(tk.Frame):
         self.update_image(self.values)
 
     @staticmethod
-    def transform_points(points, rotation_xy, z_near, z_far, dx, dy, focal_length_1, focal_length_2, k1, k2, center1,
-                         center2):
+    def transform_points(points, rotation_xy, z_near, z_far, dx, dy, k1, cam_x, cam_y):
         object = []
 
         for s in points:
@@ -71,7 +69,7 @@ class ImageEditor(tk.Frame):
 
         P = np.array([[angle_cos, -angle_sin, dx, 0], [angle_sin, angle_cos, dy, 0],
                       [0, 0, -z_far / z_range, z_near * z_far / z_range], [0, 0, 1, 0]])
-        Cam = np.array([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]])
+        Cam = np.array([[cam_x, 0, 0, 0], [0, cam_y, 0, 0], [0, 0, 1, 0]])
 
         dots = []
 
@@ -80,14 +78,16 @@ class ImageEditor(tk.Frame):
             dots.append(f / f[2])
         dots = np.array(dots)
 
-        dots_center = np.array([center1, center2])
-        K1 = k1
-        K2 = k2
+        dots_center = np.array([0.1, 0.1])
 
-        f1 = focal_length_1
-        f2 = focal_length_2
+        r = (dots[:, :2] - dots_center) ** 2
 
-        mask = np.expand_dims(K1 * f1 + K2 * f2, axis=-1)
+        f1 = r.sum(axis=1)
+        f2 = (r ** 2).sum(axis=1)
+
+        K2 = 0
+
+        mask = np.expand_dims(k1 * f1 + K2 * f2, axis=-1)
         dots_new = (dots[:, :2]) + (dots[:, :2] - dots_center) * mask
 
         return (dots_new[:, 0], dots_new[:, 1]), (dots[:, 0], dots[:, 1])
@@ -95,7 +95,6 @@ class ImageEditor(tk.Frame):
     def draw_model(self, points):
         self.plot1.clear()
         self.plot1.plot(points[0][0], points[0][1], '-D')
-        self.plot1.plot(points[1][0], points[1][1], '-D')
         self.canvas.draw()
 
     def create_controls(self):
@@ -110,22 +109,14 @@ class ImageEditor(tk.Frame):
         self.dy_slider = Slider(self, "dY", -100, 100, 0)
         self.dy_slider.grid(column=1, row=5)
 
-        self.focal_length_1_slider = Slider(self, "Focal Length 1", 1, 100, 1)
-        self.focal_length_1_slider.grid(column=2, row=1)
-        self.focal_length_2_slider = Slider(self, "Focal Length 2", 1, 100, 1)
-        self.focal_length_2_slider.grid(column=2, row=2)
-
         self.k1_slider = Slider(self, "K1", -100, 100, 0)
         self.k1_slider.grid(column=2, row=3)
 
-        self.k2_slider = Slider(self, "K2", -100, 100, 0)
-        self.k2_slider.grid(column=2, row=4)
+        self.c1_slider = Slider(self, "Cam X", -10, 10, 0.5)
+        self.c1_slider.grid(column=2, row=4)
 
-        self.c1_slider = Slider(self, "Radius Center 1", -10, 10, 0.5)
-        self.c1_slider.grid(column=2, row=5)
-
-        self.c2_slider = Slider(self, "Radius Center 2", -10, 10, 0.5)
-        self.c2_slider.grid(column=2, row=6)
+        self.c2_slider = Slider(self, "Cam Y", -10, 10, 0.5)
+        self.c2_slider.grid(column=2, row=5)
 
         rx.combine_latest(
             self.rotate_xy_slider.observable,
@@ -133,10 +124,7 @@ class ImageEditor(tk.Frame):
             self.z_far_slider.observable,
             self.dx_slider.observable,
             self.dy_slider.observable,
-            self.focal_length_1_slider.observable,
-            self.focal_length_2_slider.observable,
             self.k1_slider.observable,
-            self.k2_slider.observable,
             self.c1_slider.observable,
             self.c2_slider.observable,
         ).pipe(debounce(.5)).subscribe(self.update_image)
