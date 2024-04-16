@@ -64,9 +64,12 @@ class ImageEditor(tk.Frame):
 
         object = np.array(object).astype(float)
 
+        angle_sin = np.sin(rotation_xy)
+        angle_cos = np.cos(rotation_xy)
+
         z_range = z_far - z_near
 
-        P = np.array([[rotation_xy, 1 - rotation_xy, dx, 0], [-1 + rotation_xy, rotation_xy, dy, 0],
+        P = np.array([[angle_cos, -angle_sin, dx, 0], [angle_sin, angle_cos, dy, 0],
                       [0, 0, -z_far / z_range, z_near * z_far / z_range], [0, 0, 1, 0]])
         Cam = np.array([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]])
 
@@ -96,7 +99,7 @@ class ImageEditor(tk.Frame):
         self.canvas.draw()
 
     def create_controls(self):
-        self.rotate_xy_slider = Slider(self, "Rotation XY", 0, 1, 0)
+        self.rotate_xy_slider = Slider(self, "Rotation XY", 0, 2 * np.pi, 0)
         self.rotate_xy_slider.grid(column=1, row=1)
         self.z_near_slider = Slider(self, "Z Near", -100, 100, -3)
         self.z_near_slider.grid(column=1, row=2)
